@@ -18,7 +18,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install nornyx
+      # Switch to `pip install nornyx` once it is published to PyPI.
+      - run: pip install "nornyx @ git+https://github.com/mazinmarji/nornyx@v1.1.9"
       - run: nornyx workspace-check --manifest nornyx.workspace.yaml --write
       - uses: peter-evans/create-pull-request@v6
         with:
