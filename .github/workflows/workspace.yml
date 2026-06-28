@@ -13,9 +13,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # Install from the GitHub tag for now; switch to `pip install nornyx`
-      # once it is published to PyPI.
-      - run: pip install "nornyx @ git+https://github.com/mazinmarji/nornyx@v1.1.9"
+      - run: pip install nornyx
       # Fails the build (exit 1) if any service's policy diverges from the
       # canonical SafeDeliveryPolicy declared in nornyx.workspace.yaml.
       - run: nornyx workspace-check --manifest nornyx.workspace.yaml
