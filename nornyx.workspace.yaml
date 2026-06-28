@@ -1,0 +1,15 @@
+# Canonical org governance standard for AgenticNetworks, enforced across services.
+# `nornyx workspace-check` verifies each service matches; `--write` propagates it.
+workspace: AgenticNetworks
+
+policies:
+  SafeDeliveryPolicy:
+    - deny secrets_to_llm
+    - require tests_if_code_changed
+    - deny nondeterministic_evaluation
+    - require evidence_if_harness_completed
+    - require human_approval_before_merge
+
+members:
+  - path: services/govflags.nyx
+  - path: services/notify.nyx

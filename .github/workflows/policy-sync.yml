@@ -1,0 +1,31 @@
+name: policy-sync
+
+# Edit the canonical policy once in nornyx.workspace.yaml; this job propagates it
+# into every service contract and opens a PR for a human to approve.
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # weekly, Monday 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install nornyx
+      - run: nornyx workspace-check --manifest nornyx.workspace.yaml --write
+      - uses: peter-evans/create-pull-request@v6
+        with:
+          title: "Propagate canonical workspace policy"
+          commit-message: "chore: sync workspace policy from manifest"
+          branch: policy-sync
+          body: |
+            Automated propagation of the canonical `SafeDeliveryPolicy` from
+            `nornyx.workspace.yaml` into the service contracts. Review and approve
+            to keep human sign-off in the loop.

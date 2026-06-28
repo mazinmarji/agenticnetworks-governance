@@ -1,0 +1,134 @@
+nornyx: "0.1"
+project:
+  name: GovFlags
+  category: context_native_agentic_engineering_language
+  description: "A small governed feature-flag API, developed under a Nornyx contract."
+
+constitution:
+  principles:
+    - human_authority_over_high_impact_actions
+    - evidence_required_for_code_changes
+    - no_secret_exposure
+    - deterministic_evaluation_only
+    - no_unapproved_self_modification
+
+intents:
+  - name: DeliverGovFlags
+    goal: "Build a deterministic feature-flag API governed by context, policy, evals, and human approval."
+    success:
+      - "Every functional requirement in docs/BRD.md is implemented and tested."
+      - "Flag evaluation is deterministic per (key, user_id)."
+      - "Every code change ships with passing tests and a human approval."
+
+contexts:
+  - name: RepoContext
+    include:
+      - "app/**/*.py"
+      - "tests/**/*.py"
+      - "docs/BRD.md"
+    authority:
+      - "docs/BRD.md"
+    exclude:
+      - ".venv/**"
+      - "**/.env"
+    budget:
+      max_tokens: 24000
+      reserve_output_tokens: 4000
+    taint:
+      repo: trusted_repo_file
+      authoritative_repo: authoritative_repo_file
+      user_prompt: untrusted
+      external_web: untrusted
+
+skills:
+  - name: PatchBuilder
+    purpose: "Implement a small scoped change to the API."
+    input: [TaskSpec, ContextPack]
+    output: [PatchDiff]
+  - name: TestRepair
+    purpose: "Add or repair tests for the change."
+    input: [PatchDiff]
+    output: [TestReport]
+  - name: EvidencePack
+    purpose: "Collect delivery evidence."
+    input: [PatchDiff, TestReport]
+    output: [EvidenceManifest]
+
+policies:
+  - name: SafeDeliveryPolicy
+    rules:
+      - deny secrets_to_llm
+      - require tests_if_code_changed
+      - deny nondeterministic_evaluation
+      - require evidence_if_harness_completed
+      - require human_approval_before_merge
+
+agents:
+  - name: Builder
+    role: "Implement the smallest scoped API change per the BRD."
+    skills: [PatchBuilder, TestRepair, EvidencePack]
+    policy: SafeDeliveryPolicy
+  - name: Reviewer
+    role: "Review correctness, scope, and BRD conformance."
+    skills: [EvidencePack]
+    policy: SafeDeliveryPolicy
+
+harnesses:
+  - name: DeliveryHarness
+    context: RepoContext
+    flow:
+      - agent: Builder
+        action: implement
+      - tool: tests
+        action: run
+      - eval: GovFlagsEval
+        action: run
+      - agent: Reviewer
+        action: review
+      - evidence: DeliveryEvidence
+        action: pack
+    repair:
+      - on: test_failure
+        agent: Builder
+        action: repair
+        max_attempts: 3
+    gate:
+      - require: tests.pass
+      - require: deterministic_evaluation
+      - require: human_approval_before_merge
+
+traces:
+  - name: DeliveryTrace
+    standard: OpenTelemetry.GenAI
+    capture:
+      - tool_call
+      - policy_decision
+      - approval_event
+      - file_change
+      - evidence_created
+
+evals:
+  - name: GovFlagsEval
+    metrics:
+      - tests_pass == true
+      - evaluation_is_deterministic == true
+      - no_secret_exposure == true
+
+evidence:
+  required:
+    - patch.diff
+    - test_report.txt
+    - brd_conformance.md
+    - approval_log.json
+
+approvals:
+  - name: HumanMergeApproval
+    required_for:
+      - merge
+      - policy_change
+
+budgets:
+  - name: StandardDevBudget
+    max_tokens: 80000
+    max_cost_usd: 10
+    max_runtime_minutes: 30
