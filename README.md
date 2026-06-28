@@ -21,7 +21,8 @@ a divergent copy of the "same" org policy and still pass its own drift gate. Thi
 repo is the layer *above* the services: it makes the org standard a checked
 artifact, not a convention. See [org-governance/FINDINGS.md](org-governance/FINDINGS.md)
 for the adversarial test that motivated it, and the
-[case study](https://github.com/mazinmarji/nornyx) for the full arc.
+[case study](https://github.com/mazinmarji/nornyx/blob/main/docs/CASE_STUDY_multi_repo_governance.md)
+for the full arc.
 
 ## Try it
 
