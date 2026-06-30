@@ -41,3 +41,18 @@ nornyx workspace-check --manifest nornyx.workspace.yaml --write  # propagate
 
 The contracts here are governed copies; each service edits its own behaviour, but
 `SafeDeliveryPolicy` is owned by this workspace.
+
+## Cross-repo enforcement (live)
+
+The standalone service repos don't trust a local copy of the policy — they **pull
+this repo's canonical `nornyx.workspace.yaml` live** and enforce it themselves:
+
+- each service repo's **CI** runs `scripts/policy_conformance.py` on every push/PR
+  (verify mode) — it fails if that repo's `SafeDeliveryPolicy` diverges from the
+  canonical one here;
+- each service repo's **weekly `policy-sync`** runs it with `--write`, regenerates
+  its control artifacts, and opens a same-repo PR for a human to approve.
+
+So changing the policy once, here, ripples out to every service — using only each
+repo's own token, with a human approving every change. Full design:
+[docs/CROSS_REPO_ENFORCEMENT.md](docs/CROSS_REPO_ENFORCEMENT.md).
