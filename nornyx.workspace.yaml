@@ -9,6 +9,7 @@ policies:
     - deny nondeterministic_evaluation
     - require evidence_if_harness_completed
     - require human_approval_before_merge
+    - require changelog_updated
 
 members:
   - path: services/govflags.nyx
