@@ -37,7 +37,7 @@ nornyx workspace-check --manifest nornyx.workspace.yaml --write  # propagate
 | Service | Contract | Standalone repo |
 |---------|----------|-----------------|
 | GovFlags | [services/govflags.nyx](services/govflags.nyx) | [mazinmarji/govflags](https://github.com/mazinmarji/govflags) |
-| NotifySvc | [services/notify.nyx](services/notify.nyx) | — (contract-only) |
+| NotifySvc | [services/notify.nyx](services/notify.nyx) | [mazinmarji/notify](https://github.com/mazinmarji/notify) |
 
 The contracts here are governed copies; each service edits its own behaviour, but
 `SafeDeliveryPolicy` is owned by this workspace.
