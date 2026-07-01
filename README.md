@@ -56,3 +56,9 @@ this repo's canonical `nornyx.workspace.yaml` live** and enforce it themselves:
 So changing the policy once, here, ripples out to every service — using only each
 repo's own token, with a human approving every change. Full design:
 [docs/CROSS_REPO_ENFORCEMENT.md](docs/CROSS_REPO_ENFORCEMENT.md).
+
+The services no longer even **copy** the policy: since Nornyx **1.3.0** they
+reference it with the language-native `ref:` (`policies: [{name, ref:
+org-policy.yaml#SafeDeliveryPolicy}]`), so there is no inline copy in the contract
+to drift. See the root-fix section of
+[org-governance/FINDINGS.md](org-governance/FINDINGS.md).

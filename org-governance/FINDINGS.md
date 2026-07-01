@@ -79,3 +79,33 @@ avoiding reopening the frozen v1.0 schema or adding cross-repo file resolution.
 The remaining (deliberate) limit: members still each carry a *resolved copy*, so
 a contract is auditable on its face; they reference the manifest at sync time,
 not at read time.
+
+## Root fix (Nornyx v1.3.0): language-native `policy ref`
+
+Product implication #1 above is now shipped. Nornyx **1.3.0** adds a policy
+**`ref`** — a contract references the canonical policy instead of copying it:
+
+```yaml
+policies:
+  - name: SafeDeliveryPolicy
+    ref: org-policy.yaml#SafeDeliveryPolicy
+```
+
+`ref` is `<path>#<PolicyName>`, resolved at **load time** from a local `.nyx`
+contract or a workspace manifest. Crucially it did **not** require reopening the
+frozen v1.0 schema (the concern that motivated the `--write` sync workaround): the
+ref compiles into inline `rules` at load, so the checker, generator, and drift
+gate all see a normal policy — no new top-level block.
+
+**The services adopted it** ([govflags#3](https://github.com/mazinmarji/govflags/pull/3),
+[notify#3](https://github.com/mazinmarji/notify/pull/3)): each contract now `ref`s a
+single vendored canonical policy (`org-policy.yaml`, refreshed by `policy-sync`)
+instead of inlining the rules — so the contract carries **no copy of the policy at
+all**, closing the "members still carry a resolved copy" limit above at the
+contract level. (The one vendored file per repo is still a local resolved copy kept
+current by `policy-sync`; cross-repo resolution at read time stays out of scope by
+design — Nornyx remains offline.)
+
+So the arc is complete: the gap was found here → a workaround shipped
+(`workspace-check` + `--write`) → the **root fix** shipped in the language
+(`policy ref`, v1.3.0) → the real service repos migrated onto it.
