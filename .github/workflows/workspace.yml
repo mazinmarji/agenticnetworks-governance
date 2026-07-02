@@ -14,6 +14,19 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install nornyx
-      # Fails the build (exit 1) if any service's policy diverges from the
-      # canonical SafeDeliveryPolicy declared in nornyx.workspace.yaml.
+      # Central view: fails the build (exit 1) if any local copy under services/
+      # diverges from the canonical SafeDeliveryPolicy in nornyx.workspace.yaml.
       - run: nornyx workspace-check --manifest nornyx.workspace.yaml
+
+  live-members:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "nornyx>=1.3.0" pyyaml
+      # Authoritative check: fetches each member's LIVE contract from its shipping
+      # repo and fails if it no longer resolves to the canonical policy — catching
+      # a member that diverged or disabled its own conformance. Read-only.
+      - run: python scripts/verify_live_members.py

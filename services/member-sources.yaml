@@ -1,0 +1,16 @@
+# Live source of each workspace member's contract, used by
+# scripts/verify_live_members.py to check the SHIPPING repos (not the local
+# copies) against the canonical SafeDeliveryPolicy.
+#
+# Keyed by the member `path` in nornyx.workspace.yaml. `repo` is owner/name on
+# GitHub; `contract` is the path to that repo's top-level .nyx on its default
+# branch. Every member declared in nornyx.workspace.yaml MUST have an entry here
+# (the check fails closed on a missing mapping), so adding a member and wiring
+# its live verification stay coupled.
+members:
+  services/govflags.nyx:
+    repo: mazinmarji/govflags
+    contract: govflags.nyx
+  services/notify.nyx:
+    repo: mazinmarji/notify
+    contract: notify.nyx
