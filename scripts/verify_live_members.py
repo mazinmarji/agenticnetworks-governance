@@ -84,9 +84,9 @@ def _verify_member(member_path: str, source: dict, canonical: dict) -> tuple[lis
     try:
         contract_text = _fetch(repo, contract_path)
     except urllib.error.HTTPError as exc:
-        return [f"{member_path}: live contract {repo}/{contract_path} -> HTTP {exc.code}"]
+        return ([f"{member_path}: live contract {repo}/{contract_path} -> HTTP {exc.code}"], None)
     except (urllib.error.URLError, OSError) as exc:
-        return [f"{member_path}: cannot reach {repo}/{contract_path}: {exc}"]
+        return ([f"{member_path}: cannot reach {repo}/{contract_path}: {exc}"], None)
 
     with tempfile.TemporaryDirectory() as tmp:
         tmpdir = Path(tmp)
@@ -103,7 +103,7 @@ def _verify_member(member_path: str, source: dict, canonical: dict) -> tuple[lis
             try:
                 (tmpdir / Path(ref_file).name).write_text(_fetch(repo, ref_repo_path), encoding="utf-8")
             except (urllib.error.URLError, OSError) as exc:
-                return [f"{member_path}: contract refs '{ref_file}' but {repo}/{ref_repo_path} is unreachable: {exc}"]
+                return ([f"{member_path}: contract refs '{ref_file}' but {repo}/{ref_repo_path} is unreachable: {exc}"], None)
 
         # Check the live contract against THIS repo's canonical policy.
         manifest = {
@@ -121,8 +121,8 @@ def _verify_member(member_path: str, source: dict, canonical: dict) -> tuple[lis
         if result.returncode != 0:
             detail = (result.stdout + result.stderr).strip().splitlines()
             tail = detail[-1] if detail else "workspace-check failed"
-            return [f"{member_path}: live contract at {repo}/{contract_path} diverges from canonical — {tail}"]
-    return []
+            return ([f"{member_path}: live contract at {repo}/{contract_path} diverges from canonical — {tail}"], None)
+    return ([], None)
 
 
 def main() -> int:
