@@ -27,7 +27,7 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import yaml
 
@@ -64,11 +64,16 @@ def _verify_member(member_path: str, source: dict, canonical: dict) -> list[str]
         (tmpdir / contract_name).write_text(contract_text, encoding="utf-8")
 
         # Fetch every file the live contract references (its vendored policy).
+        # A `ref:` target is relative to the CONTRACT's directory in the repo
+        # (e.g. apps/backend/contracts/org-policy.yaml), so resolve it there — not
+        # at repo root — then write it flat beside the contract in the temp dir.
+        contract_dir = PurePosixPath(contract_path).parent
         for ref_file in sorted(set(_REF_RE.findall(contract_text))):
+            ref_repo_path = str(contract_dir / ref_file)
             try:
-                (tmpdir / ref_file).write_text(_fetch(repo, ref_file), encoding="utf-8")
+                (tmpdir / Path(ref_file).name).write_text(_fetch(repo, ref_repo_path), encoding="utf-8")
             except (urllib.error.URLError, OSError) as exc:
-                return [f"{member_path}: contract refs '{ref_file}' but it is unreachable in {repo}: {exc}"]
+                return [f"{member_path}: contract refs '{ref_file}' but {repo}/{ref_repo_path} is unreachable: {exc}"]
 
         # Check the live contract against THIS repo's canonical policy.
         manifest = {

@@ -14,3 +14,6 @@ members:
   services/notify.nyx:
     repo: mazinmarji/notify
     contract: notify.nyx
+  services/mission-control-os.nyx:
+    repo: mazinmarji/mission-control-os
+    contract: apps/backend/contracts/org-delivery.nyx

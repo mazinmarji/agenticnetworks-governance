@@ -14,3 +14,4 @@ policies:
 members:
   - path: services/govflags.nyx
   - path: services/notify.nyx
+  - path: services/mission-control-os.nyx
