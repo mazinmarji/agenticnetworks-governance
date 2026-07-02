@@ -21,6 +21,8 @@ token needed (public raw URLs).
 
 from __future__ import annotations
 
+import base64
+import json
 import re
 import subprocess
 import sys
@@ -40,8 +42,22 @@ _REF_RE = re.compile(r"^\s*ref:\s*([^#\s]+)#", re.MULTILINE)
 
 def _fetch(repo: str, path: str, branch: str = "main") -> str:
     url = RAW.format(repo=repo, branch=branch, path=path)
-    with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310 (public GitHub raw)
-        return resp.read().decode("utf-8")
+    try:
+        with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310 (public GitHub raw)
+            return resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            raise
+    # raw.githubusercontent.com can 404 for seconds after a member merges (CDN
+    # lag). The contents API is fresh immediately — fall back to it so a member's
+    # first post-merge run isn't a false failure.
+    api = f"https://api.github.com/repos/{repo}/contents/{path}?ref={branch}"
+    req = urllib.request.Request(  # noqa: S310 (public GitHub API)
+        api, headers={"Accept": "application/vnd.github+json", "User-Agent": "agenticnetworks-governance"}
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+        payload = json.loads(resp.read().decode("utf-8"))
+    return base64.b64decode(payload["content"]).decode("utf-8")
 
 
 def _verify_member(member_path: str, source: dict, canonical: dict) -> list[str]:
