@@ -16,11 +16,22 @@ its own within-repo drift gate — exactly the cross-repo gap described in
 
 ## Two layers of enforcement
 
-1. **Inside this repo (central view).**
-   [`workspace.yml`](../.github/workflows/workspace.yml) runs
-   `nornyx workspace-check` over the governed copies on every push/PR;
+1. **Inside this repo (central view + authoritative live check).**
+   [`workspace.yml`](../.github/workflows/workspace.yml) has two jobs:
+   - `workspace-check` runs `nornyx workspace-check` over the governed copies
+     under [`services/`](../services) — a central *view* of the policy.
+   - `live-members` runs [`scripts/verify_live_members.py`](../scripts/verify_live_members.py),
+     which fetches each member's **live** contract from its shipping repo
+     (mapped in [`services/member-sources.yaml`](../services/member-sources.yaml))
+     and fails if that live contract no longer resolves to the canonical policy.
+     This closes the copy-vs-reality gap: the central copies are only a view, so
+     a member repo that diverged — or quietly dropped its own conformance CI —
+     is now caught from the center too. It also fails closed if a declared member
+     is missing a source mapping, so onboarding a member and verifying it live
+     stay coupled.
+
    [`policy-sync.yml`](../.github/workflows/policy-sync.yml) propagates the
-   canonical policy into those copies and opens a PR.
+   canonical policy into the local copies and opens a PR.
 
 2. **Inside each service repo (live, pull-based).** Each service repo runs
    `scripts/policy_conformance.py`, which:
