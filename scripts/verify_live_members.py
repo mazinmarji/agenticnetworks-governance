@@ -17,17 +17,24 @@ via `services/member-sources.yaml`) it:
 Fails closed: a member with no source mapping, an unreachable repo, a missing
 contract, or a divergent policy all exit non-zero. Read-only (GET only); no
 token needed (public raw URLs).
+
+Private members (marked `visibility: private` in member-sources.yaml) cannot be
+fetched by an unauthenticated central check, so they are deferred to their own
+in-repo conformance CI — the local-copy check (workspace.yml) still holds them to
+canonical here. This keeps the center token-free (least privilege).
 """
 
 from __future__ import annotations
 
+import base64
+import json
 import re
 import subprocess
 import sys
 import tempfile
 import urllib.error
 import urllib.request
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import yaml
 
@@ -40,23 +47,46 @@ _REF_RE = re.compile(r"^\s*ref:\s*([^#\s]+)#", re.MULTILINE)
 
 def _fetch(repo: str, path: str, branch: str = "main") -> str:
     url = RAW.format(repo=repo, branch=branch, path=path)
-    with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310 (public GitHub raw)
-        return resp.read().decode("utf-8")
+    try:
+        with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310 (public GitHub raw)
+            return resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            raise
+    # raw.githubusercontent.com can 404 for seconds after a member merges (CDN
+    # lag). The contents API is fresh immediately — fall back to it so a member's
+    # first post-merge run isn't a false failure.
+    api = f"https://api.github.com/repos/{repo}/contents/{path}?ref={branch}"
+    req = urllib.request.Request(  # noqa: S310 (public GitHub API)
+        api, headers={"Accept": "application/vnd.github+json", "User-Agent": "agenticnetworks-governance"}
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+        payload = json.loads(resp.read().decode("utf-8"))
+    return base64.b64decode(payload["content"]).decode("utf-8")
 
 
-def _verify_member(member_path: str, source: dict, canonical: dict) -> list[str]:
-    """Return a list of failure messages for one member (empty == conformant)."""
+def _verify_member(member_path: str, source: dict, canonical: dict) -> tuple[list[str], str | None]:
+    """Verify one member. Returns (failures, deferred_note).
+
+    failures is empty when conformant; deferred_note is set (and failures empty)
+    for a private member the unauthenticated central check cannot fetch — those
+    are enforced by their own in-repo CI, and the local-copy check (layer 1) still
+    holds them to canonical here.
+    """
     repo = source.get("repo")
     contract_path = source.get("contract")
     if not repo or not contract_path:
-        return [f"{member_path}: source mapping needs both 'repo' and 'contract'"]
+        return ([f"{member_path}: source mapping needs both 'repo' and 'contract'"], None)
+
+    if str(source.get("visibility", "public")).lower() == "private":
+        return ([], f"{member_path}: private repo — deferred to its own CI (live central fetch not possible unauthenticated)")
 
     try:
         contract_text = _fetch(repo, contract_path)
     except urllib.error.HTTPError as exc:
-        return [f"{member_path}: live contract {repo}/{contract_path} -> HTTP {exc.code}"]
+        return ([f"{member_path}: live contract {repo}/{contract_path} -> HTTP {exc.code}"], None)
     except (urllib.error.URLError, OSError) as exc:
-        return [f"{member_path}: cannot reach {repo}/{contract_path}: {exc}"]
+        return ([f"{member_path}: cannot reach {repo}/{contract_path}: {exc}"], None)
 
     with tempfile.TemporaryDirectory() as tmp:
         tmpdir = Path(tmp)
@@ -64,11 +94,16 @@ def _verify_member(member_path: str, source: dict, canonical: dict) -> list[str]
         (tmpdir / contract_name).write_text(contract_text, encoding="utf-8")
 
         # Fetch every file the live contract references (its vendored policy).
+        # A `ref:` target is relative to the CONTRACT's directory in the repo
+        # (e.g. apps/backend/contracts/org-policy.yaml), so resolve it there — not
+        # at repo root — then write it flat beside the contract in the temp dir.
+        contract_dir = PurePosixPath(contract_path).parent
         for ref_file in sorted(set(_REF_RE.findall(contract_text))):
+            ref_repo_path = str(contract_dir / ref_file)
             try:
-                (tmpdir / ref_file).write_text(_fetch(repo, ref_file), encoding="utf-8")
+                (tmpdir / Path(ref_file).name).write_text(_fetch(repo, ref_repo_path), encoding="utf-8")
             except (urllib.error.URLError, OSError) as exc:
-                return [f"{member_path}: contract refs '{ref_file}' but it is unreachable in {repo}: {exc}"]
+                return ([f"{member_path}: contract refs '{ref_file}' but {repo}/{ref_repo_path} is unreachable: {exc}"], None)
 
         # Check the live contract against THIS repo's canonical policy.
         manifest = {
@@ -86,8 +121,8 @@ def _verify_member(member_path: str, source: dict, canonical: dict) -> list[str]
         if result.returncode != 0:
             detail = (result.stdout + result.stderr).strip().splitlines()
             tail = detail[-1] if detail else "workspace-check failed"
-            return [f"{member_path}: live contract at {repo}/{contract_path} diverges from canonical — {tail}"]
-    return []
+            return ([f"{member_path}: live contract at {repo}/{contract_path} diverges from canonical — {tail}"], None)
+    return ([], None)
 
 
 def main() -> int:
@@ -96,12 +131,19 @@ def main() -> int:
     sources = (yaml.safe_load(SOURCES.read_text(encoding="utf-8")) or {}).get("members", {})
 
     failures: list[str] = []
+    deferred: list[str] = []
+    verified = 0
     for member_path in declared:
         source = sources.get(member_path)
         if not source:
             failures.append(f"{member_path}: declared in the manifest but missing from services/member-sources.yaml")
             continue
-        failures.extend(_verify_member(member_path, source, canonical))
+        member_failures, note = _verify_member(member_path, source, canonical)
+        failures.extend(member_failures)
+        if note:
+            deferred.append(note)
+        elif not member_failures:
+            verified += 1
 
     # A source mapping for a repo that is no longer a member is dead config.
     for extra in set(sources) - set(declared):
@@ -112,7 +154,9 @@ def main() -> int:
         for f in failures:
             print(f"  - {f}")
         return 1
-    print(f"Live member verification passed: {len(declared)} member(s) ship a contract that resolves to canonical.")
+    print(f"Live member verification passed: {verified} public member(s) resolve to canonical.")
+    for note in deferred:
+        print(f"  deferred - {note}")
     return 0
 
 

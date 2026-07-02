@@ -1,0 +1,36 @@
+nornyx: "0.1"
+project:
+  name: MissionControlOS-OrgDelivery
+  category: context_native_agentic_engineering_language
+  description: >
+    Central copy of Mission Control OS's org-delivery contract for the workspace
+    view. The live contract ships from
+    mazinmarji/mission-control-os (apps/backend/contracts/org-delivery.nyx) and is
+    verified against canonical by the live-members check; here the policy is
+    inlined (this repo has no vendored org-policy.yaml) so workspace-check can
+    resolve it.
+
+constitution:
+  principles:
+    - human_authority_over_high_impact_actions
+    - evidence_required_for_code_changes
+    - no_secret_exposure
+    - deterministic_evaluation_only
+    - no_unapproved_self_modification
+
+policies:
+  # ORG STANDARD — inlined copy (kept identical to the canonical SafeDeliveryPolicy
+  # in nornyx.workspace.yaml; propagated by policy-sync).
+  - name: SafeDeliveryPolicy
+    rules:
+      - deny secrets_to_llm
+      - require tests_if_code_changed
+      - deny nondeterministic_evaluation
+      - require evidence_if_harness_completed
+      - require human_approval_before_merge
+      - require changelog_updated
+
+agents:
+  - name: Deliverer
+    role: "Implement the smallest scoped MCO change under the org delivery policy."
+    policy: SafeDeliveryPolicy

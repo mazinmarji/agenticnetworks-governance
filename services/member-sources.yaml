@@ -14,3 +14,10 @@ members:
   services/notify.nyx:
     repo: mazinmarji/notify
     contract: notify.nyx
+  services/mission-control-os.nyx:
+    repo: mazinmarji/mission-control-os
+    contract: apps/backend/contracts/org-delivery.nyx
+    # Private repo (by design): the central check runs unauthenticated and cannot
+    # fetch it. Enforcement is by MCO's own CI (org_policy_conformance.py) — the
+    # central check verifies the local copy (layer 1) and defers the live check.
+    visibility: private

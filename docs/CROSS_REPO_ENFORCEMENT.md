@@ -21,9 +21,13 @@ its own within-repo drift gate — exactly the cross-repo gap described in
    - `workspace-check` runs `nornyx workspace-check` over the governed copies
      under [`services/`](../services) — a central *view* of the policy.
    - `live-members` runs [`scripts/verify_live_members.py`](../scripts/verify_live_members.py),
-     which fetches each member's **live** contract from its shipping repo
+     which fetches each **public** member's **live** contract from its shipping repo
      (mapped in [`services/member-sources.yaml`](../services/member-sources.yaml))
      and fails if that live contract no longer resolves to the canonical policy.
+     A **private** member (marked `visibility: private`) can't be fetched by an
+     unauthenticated central check, so it is deferred to its own in-repo
+     conformance CI — the local-copy check above still holds it to canonical here.
+     This keeps the center token-free (least privilege).
      This closes the copy-vs-reality gap: the central copies are only a view, so
      a member repo that diverged — or quietly dropped its own conformance CI —
      is now caught from the center too. It also fails closed if a declared member
