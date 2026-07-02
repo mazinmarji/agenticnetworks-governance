@@ -17,6 +17,11 @@ via `services/member-sources.yaml`) it:
 Fails closed: a member with no source mapping, an unreachable repo, a missing
 contract, or a divergent policy all exit non-zero. Read-only (GET only); no
 token needed (public raw URLs).
+
+Private members (marked `visibility: private` in member-sources.yaml) cannot be
+fetched by an unauthenticated central check, so they are deferred to their own
+in-repo conformance CI — the local-copy check (workspace.yml) still holds them to
+canonical here. This keeps the center token-free (least privilege).
 """
 
 from __future__ import annotations
@@ -60,12 +65,21 @@ def _fetch(repo: str, path: str, branch: str = "main") -> str:
     return base64.b64decode(payload["content"]).decode("utf-8")
 
 
-def _verify_member(member_path: str, source: dict, canonical: dict) -> list[str]:
-    """Return a list of failure messages for one member (empty == conformant)."""
+def _verify_member(member_path: str, source: dict, canonical: dict) -> tuple[list[str], str | None]:
+    """Verify one member. Returns (failures, deferred_note).
+
+    failures is empty when conformant; deferred_note is set (and failures empty)
+    for a private member the unauthenticated central check cannot fetch — those
+    are enforced by their own in-repo CI, and the local-copy check (layer 1) still
+    holds them to canonical here.
+    """
     repo = source.get("repo")
     contract_path = source.get("contract")
     if not repo or not contract_path:
-        return [f"{member_path}: source mapping needs both 'repo' and 'contract'"]
+        return ([f"{member_path}: source mapping needs both 'repo' and 'contract'"], None)
+
+    if str(source.get("visibility", "public")).lower() == "private":
+        return ([], f"{member_path}: private repo — deferred to its own CI (live central fetch not possible unauthenticated)")
 
     try:
         contract_text = _fetch(repo, contract_path)
@@ -117,12 +131,19 @@ def main() -> int:
     sources = (yaml.safe_load(SOURCES.read_text(encoding="utf-8")) or {}).get("members", {})
 
     failures: list[str] = []
+    deferred: list[str] = []
+    verified = 0
     for member_path in declared:
         source = sources.get(member_path)
         if not source:
             failures.append(f"{member_path}: declared in the manifest but missing from services/member-sources.yaml")
             continue
-        failures.extend(_verify_member(member_path, source, canonical))
+        member_failures, note = _verify_member(member_path, source, canonical)
+        failures.extend(member_failures)
+        if note:
+            deferred.append(note)
+        elif not member_failures:
+            verified += 1
 
     # A source mapping for a repo that is no longer a member is dead config.
     for extra in set(sources) - set(declared):
@@ -133,7 +154,9 @@ def main() -> int:
         for f in failures:
             print(f"  - {f}")
         return 1
-    print(f"Live member verification passed: {len(declared)} member(s) ship a contract that resolves to canonical.")
+    print(f"Live member verification passed: {verified} public member(s) resolve to canonical.")
+    for note in deferred:
+        print(f"  deferred - {note}")
     return 0
 
 
